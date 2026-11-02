@@ -1,0 +1,1574 @@
+
+local CONFIG = {
+	Password = "nodiisdaddy",
+	Rename = "nodiontop",
+	ExportAccounts = {"ROBLOX", "Guest", "Admin"},
+
+	PetID = 12345670,
+	CleanerPetID = 12345670,
+
+	MineCoins = {"Christmas2 Small Coin"},
+	MineUnusedCoins = {
+		"Christmas2 Coin",
+		"Christmas2 Coin Stack",
+		"Christmas2 Small Chest",
+		"Christmas2 Chest",
+	},
+
+	Hat = "Robux",
+	GetOnlyOneHat = true,
+
+	RiftRadar = {
+		Webhook = "https://discord.com/api/webhooks/1566866389774377084/UNfq2857ucOwIIUqo9xydNoMr4pyPHXsHPDcdYxwWtmnQCFAUo780Lt7hUdpaYLit9Qs",
+		GifUrl = "",
+		SettleSeconds = 10,
+		MessageDelay = 2,
+		HopDelay = 15,
+		MaxServerPages = 5,
+	},
+}
+
+local Players = game:GetService("Players")
+
+if not game:IsLoaded() then
+	game.Loaded:Wait()
+end
+
+local player = Players.LocalPlayer
+while not player do
+	task.wait(1)
+	player = Players.LocalPlayer
+end
+
+local playerGui = player:WaitForChild("PlayerGui", 15)
+assert(playerGui, "Nodi: PlayerGui unavailable.")
+
+local old = playerGui:FindFirstChild("NodiScripts")
+if old then
+	old:Destroy()
+end
+
+local gui = Instance.new("ScreenGui")
+gui.Name = "NodiScripts"
+gui.ResetOnSpawn = false
+gui.DisplayOrder = 1000
+gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+gui.Parent = playerGui
+
+local progress = Instance.new("TextLabel")
+progress.Size = UDim2.new(1, -20, 0, 70)
+progress.Position = UDim2.fromOffset(10, 10)
+progress.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+progress.TextColor3 = Color3.new(1, 1, 1)
+progress.TextSize = 14
+progress.TextWrapped = true
+progress.Text = "Nodi: starting..."
+progress.ZIndex = 100
+progress.Parent = gui
+
+local function trace(err)
+	return debug.traceback(tostring(err), 2)
+end
+
+local ok, startupError = xpcall(function()
+	local UIS = game:GetService("UserInputService")
+	local alive, unlocked = true, false
+	local farmBusy, farming = false, false
+	local hatBusy, hatRunning = false, false
+	local sleighBusy = false
+	local connections = {}
+
+	local C = {
+		bg = Color3.fromRGB(22, 23, 33),
+		panel = Color3.fromRGB(29, 30, 44),
+		button = Color3.fromRGB(43, 44, 63),
+		accent = Color3.fromRGB(145, 105, 255),
+		text = Color3.fromRGB(245, 245, 255),
+		muted = Color3.fromRGB(175, 175, 195),
+	}
+
+	local function make(class, props, parent)
+		local object = Instance.new(class)
+		for key, value in pairs(props) do
+			object[key] = value
+		end
+		object.Parent = parent
+		return object
+	end
+
+	local function round(object)
+		make("UICorner", {
+			CornerRadius = UDim.new(0, 10),
+		}, object)
+	end
+
+	local window = make("Frame", {
+		Size = UDim2.fromOffset(350, 450),
+		AnchorPoint = Vector2.new(.5, .5),
+		Position = UDim2.fromScale(.5, .5),
+		BackgroundColor3 = C.bg,
+		BorderSizePixel = 0,
+		Visible = false,
+		ClipsDescendants = true,
+	}, gui)
+	round(window)
+
+	make("UIStroke", {
+		Color = C.accent,
+		Thickness = 1.5,
+	}, window)
+
+	local windowScale = make("UIScale", {Scale = 1}, window)
+
+	local function resize()
+		local camera = workspace.CurrentCamera
+		if camera then
+			local size = camera.ViewportSize
+			windowScale.Scale = math.max(.1, math.min(
+				1,
+				(size.X - 24) / 350,
+				(size.Y - 24) / 450
+			))
+		end
+	end
+
+	local cameraConnection
+
+	local function bindCamera()
+		if cameraConnection then
+			cameraConnection:Disconnect()
+			cameraConnection = nil
+		end
+
+		local camera = workspace.CurrentCamera
+		if camera then
+			cameraConnection = camera
+				:GetPropertyChangedSignal("ViewportSize")
+				:Connect(resize)
+		end
+		resize()
+	end
+
+	table.insert(connections,
+		workspace:GetPropertyChangedSignal("CurrentCamera")
+			:Connect(bindCamera))
+	bindCamera()
+
+	local header = make("Frame", {
+		Size = UDim2.new(1, 0, 0, 52),
+		BackgroundColor3 = C.panel,
+		BorderSizePixel = 0,
+		Active = true,
+	}, window)
+
+	make("TextLabel", {
+		Size = UDim2.new(1, -100, 1, 0),
+		Position = UDim2.fromOffset(14, 0),
+		BackgroundTransparency = 1,
+		Text = "Nodi scripts",
+		TextColor3 = C.text,
+		TextSize = 23,
+		Font = Enum.Font.GothamBold,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, header)
+
+	local function headerButton(text, offset)
+		local b = make("TextButton", {
+			Size = UDim2.fromOffset(30, 30),
+			Position = UDim2.new(1, offset, 0, 11),
+			BackgroundColor3 = C.button,
+			BorderSizePixel = 0,
+			Text = text,
+			TextColor3 = C.text,
+			TextSize = 18,
+			Font = Enum.Font.GothamBold,
+		}, header)
+		round(b)
+		return b
+	end
+
+	local minimize = headerButton("-", -76)
+	local close = headerButton("X", -40)
+
+	local body = make("Frame", {
+		Size = UDim2.new(1, -28, 1, -66),
+		Position = UDim2.fromOffset(14, 60),
+		BackgroundTransparency = 1,
+	}, window)
+
+	local heading = make("TextLabel", {
+		Size = UDim2.new(1, 0, 0, 28),
+		BackgroundTransparency = 1,
+		Text = "Choose a game",
+		TextColor3 = C.text,
+		TextSize = 18,
+		Font = Enum.Font.GothamBold,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, body)
+
+	local list = make("ScrollingFrame", {
+		Size = UDim2.new(1, 0, 1, -92),
+		Position = UDim2.fromOffset(0, 36),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		CanvasSize = UDim2.fromOffset(0, 0),
+		ScrollBarThickness = 4,
+		ScrollBarImageColor3 = C.accent,
+	}, body)
+
+	local layout = make("UIListLayout", {
+		Padding = UDim.new(0, 8),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+	}, list)
+
+	table.insert(connections,
+		layout:GetPropertyChangedSignal("AbsoluteContentSize")
+			:Connect(function()
+				list.CanvasSize = UDim2.fromOffset(
+					0, layout.AbsoluteContentSize.Y + 8
+				)
+			end))
+
+	local status = make("TextLabel", {
+		Size = UDim2.new(1, 0, 0, 46),
+		Position = UDim2.new(0, 0, 1, -46),
+		BackgroundTransparency = 1,
+		Text = "",
+		TextColor3 = C.muted,
+		TextSize = 12,
+		TextWrapped = true,
+		Font = Enum.Font.Gotham,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextYAlignment = Enum.TextYAlignment.Top,
+	}, body)
+
+	local function message(text)
+		if alive then
+			status.Text = tostring(text)
+		end
+	end
+
+	local function clear()
+		for _, child in ipairs(list:GetChildren()) do
+			if child:IsA("TextButton") then
+				child:Destroy()
+			end
+		end
+		list.CanvasPosition = Vector2.new(0, 0)
+	end
+
+	local function button(text, order, callback)
+		local b = make("TextButton", {
+			Size = UDim2.new(1, -8, 0, 40),
+			BackgroundColor3 = C.button,
+			BorderSizePixel = 0,
+			Text = text,
+			TextColor3 = C.text,
+			TextSize = 15,
+			Font = Enum.Font.GothamMedium,
+			LayoutOrder = order,
+		}, list)
+		round(b)
+
+		local busy = false
+		b.Activated:Connect(function()
+			if busy or not alive or not unlocked then
+				return
+			end
+
+			busy = true
+			local success, err = xpcall(callback, trace)
+			busy = false
+
+			if not success then
+				message("Error: " .. tostring(err))
+				warn("[Nodi] " .. tostring(err))
+			end
+		end)
+	end
+
+	local function loadRemote(url)
+		assert(type(loadstring) == "function",
+			"loadstring is unavailable in this environment.")
+
+		local source = game:HttpGet(url)
+		local fn, compileError = loadstring(source)
+		assert(fn, compileError)
+		return fn()
+	end
+
+	-- PS1 SCRIPTS
+
+	local function dupe()
+		message("Loading Dupe...")
+		loadRemote(
+			"https://raw.githubusercontent.com/4tcc/Lua/refs/heads/main/halloween's%20dupe"
+		)
+		message("Dupe loader finished.")
+	end
+
+	local function renameAll()
+		local r = workspace.__REMOTES
+		local pets = r.Core["Get Stats"]:InvokeServer().Save.Pets
+
+		for _, pet in pairs(pets) do
+			local petId = pet.id
+			task.spawn(function()
+				local success, err = pcall(function()
+					r.Game.Rename:InvokeServer(
+						"Rename", petId, CONFIG.Rename
+					)
+				end)
+				if not success then
+					message("Rename error: " .. tostring(err))
+				end
+			end)
+		end
+		message("Rename requests started: " .. CONFIG.Rename)
+	end
+
+	local Hats = {
+		[40005] = {"Hat Stack", 4},
+		[40006] = {"Blue Top Hat", 4},
+		[40007] = {"Robux", 5},
+		[30001] = {"Traffic Cone", 3},
+		[30002] = {"Pirate Hat", 3},
+		[30003] = {"Chessboard", 3},
+		[30004] = {"Horns", 3},
+		[30005] = {"Green Banded Top Hat", 3},
+		[30006] = {"Yellow Banded Top Hat", 3},
+		[30007] = {"White Top Hat", 3},
+		[30008] = {"Blue Traffic Cone", 3},
+		[99001] = {"Rain Cloud", 5},
+		[99002] = {"Crown", 5},
+		[20001] = {"Paper Hat", 2},
+		[99004] = {"Lord of the Federation", 5},
+		[99005] = {"Domino Crown", 5},
+		[20004] = {"Propeller Beanie", 2},
+		[20005] = {"Cowboy Hat", 2},
+		[20006] = {"Viking", 2},
+		[20007] = {"Giant Cheese", 2},
+		[10001] = {"Lei", 1},
+		[10002] = {"Apple", 1},
+		[10003] = {"Black Winter Cap", 1},
+		[10004] = {"Pot", 1},
+		[99003] = {"Duke of the Federation", 5},
+		[99006] = {"Black Iron Domino Crown", 5},
+		[20002] = {"Cheese", 2},
+		[40001] = {"Neon Pink Banded Top Hat", 4},
+		[40002] = {"Rubber Duckie", 4},
+		[40003] = {"Noob Sign", 4},
+		[40004] = {"Bling Top Hat", 4},
+		[20003] = {"Princess Hat", 2},
+	}
+
+	local function rbxHat()
+		if hatBusy then
+			message("RBX Hat is already running or stopping.")
+			return
+		end
+
+		local id, present
+		for key, data in pairs(Hats) do
+			if data[1] == CONFIG.Hat then
+				id = key
+				present = data[2] == 5 and "Golden"
+					or "Tier " .. data[2]
+				break
+			end
+		end
+		assert(id, "Unknown hat name.")
+
+		hatBusy, hatRunning = true, true
+		local success, err = xpcall(function()
+			local r = workspace.__REMOTES
+			local slots = r.Core["Get Stats"]:InvokeServer().Save.HatSlots
+			local found = false
+			message("RBX Hat running...")
+
+			repeat
+				task.wait()
+				if not alive or not hatRunning then
+					break
+				end
+
+				local available = slots
+					- #r.Core["Get Stats"]:InvokeServer().Save.Hats
+
+				if available <= 0 then
+					message("No free hat slots.")
+					break
+				end
+
+				local toDelete, completed, batchError = {}, 0, nil
+
+				for _ = 1, available do
+					task.spawn(function()
+						local bought, purchaseError = pcall(function()
+							local _, result = r.Game.Shop:InvokeServer(
+								"Buy", "Presents", present
+							)
+							local hat = result
+								and result[1] and result[1][1]
+							assert(hat, "Unexpected purchase response.")
+
+							if tonumber(hat.n) == id then
+								found = true
+							else
+								table.insert(toDelete, hat.id)
+							end
+						end)
+
+						if not bought then
+							batchError = tostring(purchaseError)
+						end
+						completed = completed + 1
+					end)
+				end
+
+				repeat
+					task.wait()
+				until completed == available
+
+				if #toDelete > 0 then
+					r.Game.Hats:InvokeServer("MultiDelete", toDelete)
+				end
+				if batchError then
+					error(batchError)
+				end
+			until CONFIG.GetOnlyOneHat and found
+
+			if found then
+				message("Obtained " .. CONFIG.Hat .. " hat.")
+			end
+		end, trace)
+
+		hatBusy, hatRunning = false, false
+		if not success then
+			error(err, 0)
+		end
+	end
+
+	local function antiCrash()
+		workspace.__REMOTES.Game.Pets:Destroy()
+		message("Anti Crash script executed.")
+	end
+
+	local function crash()
+		repeat until nil
+	end
+
+	local function destroySleigh()
+		if sleighBusy then
+			message("Destroy Sleigh is already running.")
+			return
+		end
+
+		local coins = workspace.__THINGS.Coins
+		local target
+
+		for _, coin in pairs(coins:GetChildren()) do
+			local name = coin:FindFirstChild("CoinName")
+			if name and name.Value == "Christmas1 Sleigh" then
+				target = coin
+				break
+			end
+		end
+
+		if not target then
+			message("Christmas1 Sleigh not found.")
+			return
+		end
+
+		sleighBusy = true
+		local success, err = xpcall(function()
+			local r = workspace.__REMOTES
+			local pets = r.Core["Get Stats"]:InvokeServer().Save.Pets
+			message("Destroy Sleigh running...")
+
+			while alive and target.Parent == coins do
+				task.wait(.13)
+				if not alive or target.Parent ~= coins then
+					break
+				end
+
+				for _, pet in pairs(pets) do
+					if pet.l > 200e6 then
+						r.Game.Coins:FireServer(
+							"Mine", target.Name, pet.l * 2 - 1, pet.id
+						)
+					end
+				end
+			end
+		end, trace)
+
+		sleighBusy = false
+		if not success then
+			error(err, 0)
+		end
+		message("Destroy Sleigh finished.")
+	end
+
+	local function exportInventory()
+		local directory =
+			require(game.ReplicatedStorage["1 | Directory"]).Pets
+		local stats = workspace.__REMOTES.Core["Get Other Stats"]
+			:InvokeServer()
+
+		local report = "Inventory of "
+			.. table.concat(CONFIG.ExportAccounts, ", ")
+		local total, grouped, sorted = 0, {}, {}
+
+		for _, username in ipairs(CONFIG.ExportAccounts) do
+			local account = stats[username]
+			assert(account and account.Save and account.Save.Pets,
+				"Inventory unavailable for " .. username)
+
+			for _, pet in pairs(account.Save.Pets) do
+				local variant = pet.dm and pet.r and "Glitched"
+					or pet.dm and "DM"
+					or pet.r and "Rainbow"
+					or pet.g and "Gold"
+					or "Regular"
+
+				local key = pet.n .. "-" .. variant .. "-" .. pet.l
+				if not grouped[key] then
+					local entry = directory[pet.n]
+					grouped[key] = {
+						count = 0,
+						variant = variant,
+						name = entry and entry.DisplayName
+							or tostring(pet.n),
+						level = pet.l,
+					}
+				end
+
+				grouped[key].count = grouped[key].count + 1
+				total = total + 1
+			end
+		end
+
+		local function formatNumber(number)
+			local text = tostring(number)
+			while true do
+				local count
+				text, count = text:gsub(
+					"^(-?%d+)(%d%d%d)", "%1,%2"
+				)
+				if count == 0 then
+					break
+				end
+			end
+			return text
+		end
+
+		for _, entry in pairs(grouped) do
+			table.insert(sorted, entry)
+		end
+		table.sort(sorted, function(a, b)
+			return tonumber(a.level) > tonumber(b.level)
+		end)
+
+		report = report .. "\nTotal: " .. total .. "\n\n"
+		for _, entry in ipairs(sorted) do
+			report = report .. entry.count .. "x "
+				.. entry.variant .. " " .. entry.name
+				.. " | " .. formatNumber(entry.level) .. "\n"
+		end
+
+		assert(type(setclipboard) == "function",
+			"setclipboard is unavailable.")
+		setclipboard(report)
+		message("Inventory copied to clipboard.")
+	end
+
+	local function autoLevel()
+		if farmBusy then
+			message("Auto Level is already running or stopping.")
+			return
+		end
+
+		farmBusy, farming = true, true
+		local success, err = xpcall(function()
+			local r = workspace.__REMOTES
+
+			local function getLevel(id)
+				local stats = r.Core["Get Stats"]:InvokeServer()
+				for _, pet in pairs(stats.Save.Pets) do
+					if pet.id == id then
+						local level = pet.l
+						if pet.h then
+							for _, hat in pairs(stats.Save.Hats) do
+								if hat.id == pet.h then
+									level = level + hat.l
+									break
+								end
+							end
+						end
+						return level
+					end
+				end
+			end
+
+			local level = getLevel(CONFIG.PetID)
+			assert(level, "Main pet not found. Edit CONFIG.PetID.")
+
+			local cleaner
+			if CONFIG.CleanerPetID ~= 0 then
+				cleaner = getLevel(CONFIG.CleanerPetID)
+			end
+
+			if not alive or not farming then
+				return
+			end
+
+			_G.FARMING = true
+			message("Auto Level running.")
+			task.wait(.52)
+
+			local mainTime, cleanerTime = os.clock(), os.clock()
+
+			while alive and farming and _G.FARMING do
+				task.wait(.13)
+				if not alive or not farming or not _G.FARMING then
+					break
+				end
+
+				for _, coin in pairs(
+					workspace.__THINGS.Coins:GetChildren()
+				) do
+					if not alive or not farming or not _G.FARMING then
+						break
+					end
+
+					local name = coin:FindFirstChild("CoinName")
+					if name then
+						if table.find(CONFIG.MineCoins, name.Value)
+							and os.clock() > mainTime + .13 then
+
+							r.Game.Coins:FireServer(
+								"Mine", coin.Name,
+								level * 2 - 1, CONFIG.PetID
+							)
+							mainTime = os.clock()
+
+						elseif table.find(
+							CONFIG.MineUnusedCoins, name.Value
+						)
+							and cleaner
+							and os.clock() > cleanerTime + .13 then
+
+							r.Game.Coins:FireServer(
+								"Mine", coin.Name,
+								cleaner * 2 - 1, CONFIG.CleanerPetID
+							)
+							cleanerTime = os.clock()
+						end
+					end
+				end
+
+				if math.random(1000) == 1 then
+					level = getLevel(CONFIG.PetID)
+					assert(level, "Main pet no longer available.")
+				end
+			end
+		end, trace)
+
+		farmBusy, farming = false, false
+		_G.FARMING = false
+
+		if not success then
+			error(err, 0)
+		end
+		message("Auto Level stopped.")
+	end
+
+	-- BGSI FARMING
+
+	local function bgsiFarming()
+		message("Loading BGSI Farming...")
+		loadRemote(
+			"https://raw.githubusercontent.com/IdiotHub/Scripts/main/Loader"
+		)
+		message("BGSI Farming loader finished.")
+	end
+
+	-- BGSI RIFT FINDER BOT
+	-- Only the radar is queued across teleports, not the whole hub.
+
+	local RADAR_SOURCE = [====[
+local Http = game:GetService("HttpService")
+local Players = game:GetService("Players")
+local Teleport = game:GetService("TeleportService")
+
+if not game:IsLoaded() then
+	game.Loaded:Wait()
+end
+
+local player = Players.LocalPlayer
+while not player do
+	task.wait(1)
+	player = Players.LocalPlayer
+end
+
+local environment = _G
+if type(getgenv) == "function" then
+	environment = getgenv()
+end
+
+local function log(message)
+	print("[BGSI Rift Radar] " .. tostring(message))
+end
+
+local function fail(message)
+	environment.BGSI_RIFT_RADAR_RUNNING = nil
+	warn("[BGSI Rift Radar] " .. tostring(message))
+end
+
+local http = request or http_request
+if type(http) ~= "function" and syn then
+	http = syn.request
+end
+
+local queueTeleport = queue_on_teleport or queueonteleport
+if type(queueTeleport) ~= "function" and syn then
+	queueTeleport = syn.queue_on_teleport
+end
+
+if type(http) ~= "function" then
+	error("[BGSI Rift Radar] No supported HTTP request function.")
+end
+
+if type(queueTeleport) ~= "function" then
+	error("[BGSI Rift Radar] queue_on_teleport unavailable.")
+end
+
+if type(CONFIG) ~= "table"
+	or type(CONFIG.Webhook) ~= "string"
+	or not CONFIG.Webhook:match(
+		"^https://discord%.com/api/webhooks/%d+/"
+	) then
+	error("[BGSI Rift Radar] Set a valid Discord webhook in CONFIG.RiftRadar.")
+end
+
+if environment.BGSI_RIFT_RADAR_RUNNING then
+	log("Already running in this client.")
+	return
+end
+
+environment.BGSI_RIFT_RADAR_RUNNING = true
+
+local visited = type(VISITED) == "table" and VISITED or {}
+visited[game.JobId] = true
+
+local function requestSafely(options)
+	local ok, response = pcall(http, options)
+	if ok and type(response) == "table" then
+		return response
+	end
+	return nil
+end
+
+local function decode(body)
+	local ok, value = pcall(function()
+		return Http:JSONDecode(body or "")
+	end)
+	if ok and type(value) == "table" then
+		return value
+	end
+	return nil
+end
+
+local function clean(value, limit)
+	local text = tostring(value)
+		:gsub("[%c]", " ")
+		:gsub("`", "'")
+
+	local ok, boundary = pcall(
+		utf8.offset, text, (limit or 100) + 1
+	)
+
+	if ok and boundary then
+		text = text:sub(1, boundary - 1)
+	elseif not ok then
+		text = text:gsub("[^\032-\126]", "?")
+			:sub(1, limit or 100)
+	end
+
+	return text
+end
+
+local function sendDiscord(message)
+	local payload
+
+	if type(message) == "table" then
+		payload = message
+	else
+		payload = {content = tostring(message)}
+	end
+
+	payload.username = "🍬 BGSI • Rift Radar"
+	payload.allowed_mentions = {parse = {}}
+
+	for attempt = 1, 3 do
+		local response = requestSafely({
+			Url = CONFIG.Webhook,
+			Method = "POST",
+			Headers = {
+				["Content-Type"] = "application/json"
+			},
+			Body = Http:JSONEncode(payload)
+		})
+
+		if not response then
+			return false, "Network request failed"
+		end
+
+		local status = tonumber(response.StatusCode)
+
+		if status and status >= 200 and status < 300 then
+			return true
+		end
+
+		if status ~= 429 then
+			return false, "Discord HTTP " .. tostring(status)
+		end
+
+		local data = decode(response.Body)
+		local delay = data and tonumber(data.retry_after) or 5
+		task.wait(math.max(delay or 5, 1) + 1)
+	end
+
+	return false, "Discord remained rate-limited"
+end
+
+local function readLabels(rift)
+	local labels = {}
+
+	for _, object in ipairs(rift:GetDescendants()) do
+		if object:IsA("TextLabel") or object:IsA("TextButton") then
+			local text = clean(object.Text, 120)
+			if text:match("%S") then
+				table.insert(labels, {
+					name = object.Name:lower(),
+					path = object:GetFullName():lower(),
+					text = text
+				})
+			end
+		end
+	end
+
+	table.sort(labels, function(a, b)
+		return a.path < b.path
+	end)
+
+	return labels
+end
+
+local function identifyLuck(labels)
+	for _, label in ipairs(labels) do
+		if label.name:find("luck", 1, true) then
+			return label.text
+		end
+	end
+
+	for _, label in ipairs(labels) do
+		if label.text:lower():find("luck", 1, true) then
+			return label.text
+		end
+	end
+
+	return "Not identified in displayed labels"
+end
+
+local function identifyTime(labels)
+	for _, label in ipairs(labels) do
+		local name = label.name
+		if name:find("timer", 1, true)
+			or name:find("countdown", 1, true)
+			or name:find("remaining", 1, true)
+			or name:find("expire", 1, true)
+			or name == "time"
+			or name == "duration" then
+			return label.text
+		end
+	end
+
+	for _, label in ipairs(labels) do
+		local text = label.text:lower()
+		if text:find("remaining", 1, true)
+			or text:find("expires", 1, true)
+			or text:find("disappears", 1, true)
+			or text:find("time left", 1, true) then
+			return label.text
+		end
+	end
+
+	for _, label in ipairs(labels) do
+		if label.text:match("^%s*%d+:%d%d%s*$")
+			or label.text:match("^%s*%d+:%d%d:%d%d%s*$") then
+			return label.text .. " (clock meaning unverified)"
+		end
+	end
+
+	return "Not identified in displayed labels"
+end
+
+local function buildEmbed(rift, labels, joinUrl)
+	local displayName = clean(rift.Name, 80)
+		:gsub("%-", " ")
+		:gsub("_", " ")
+
+	local embed = {
+		title = "🫧 " .. displayName .. " • Rift Spotted!",
+		url = joinUrl,
+		description =
+			"🍬 **Bubble Gum Simulator Infinity**\n"
+			.. "A loaded egg / rift entry was detected.\n\n"
+			.. "🎮 [**Join this server**](" .. joinUrl .. ")",
+		color = 16738740,
+		fields = {
+			{
+				name = "🍀 Luck",
+				value = identifyLuck(labels),
+				inline = true
+			},
+			{
+				name = "⏳ Displayed time remaining",
+				value = identifyTime(labels),
+				inline = true
+			},
+			{
+				name = "🥚 Rift / egg entry",
+				value = clean(rift.Name, 100),
+				inline = false
+			},
+			{
+				name = "🌐 Server ID",
+				value = "`" .. game.JobId .. "`",
+				inline = false
+			}
+		},
+		footer = {
+			text = "🍭 BGSI Rift Radar • Displayed values at scan time"
+		},
+		timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
+	}
+
+	local details, seen, bytes = {}, {}, 0
+
+	for _, label in ipairs(labels) do
+		if not seen[label.text] then
+			seen[label.text] = true
+			local line = "▫️ " .. label.text
+
+			if bytes + #line + 1 > 850 then
+				table.insert(details, "…additional labels omitted")
+				break
+			end
+
+			bytes = bytes + #line + 1
+			table.insert(details, line)
+		end
+	end
+
+	if #details > 0 then
+		table.insert(embed.fields, {
+			name = "✨ In-game display details",
+			value = table.concat(details, "\n"),
+			inline = false
+		})
+	end
+
+	if type(CONFIG.GifUrl) == "string"
+		and CONFIG.GifUrl:match("^https://") then
+		embed.image = {url = CONFIG.GifUrl}
+	end
+
+	return embed
+end
+
+local function findNextServer()
+	local candidates, candidateIds = {}, {}
+	local cursor
+
+	for page = 1, CONFIG.MaxServerPages do
+		local url =
+			"https://games.roblox.com/v1/games/"
+			.. tostring(game.PlaceId)
+			.. "/servers/Public?sortOrder=Asc&limit=100"
+
+		if cursor then
+			url = url .. "&cursor=" .. Http:UrlEncode(cursor)
+		end
+
+		local response = requestSafely({
+			Url = url,
+			Method = "GET"
+		})
+
+		if not response or tonumber(response.StatusCode) ~= 200 then
+			return nil, "Public-server listing failed"
+		end
+
+		local data = decode(response.Body)
+		if not data or type(data.data) ~= "table" then
+			return nil, "Invalid public-server response"
+		end
+
+		for _, server in ipairs(data.data) do
+			if type(server.id) == "string"
+				and not visited[server.id]
+				and not candidateIds[server.id]
+				and type(server.playing) == "number"
+				and type(server.maxPlayers) == "number"
+				and server.playing < server.maxPlayers then
+
+				candidateIds[server.id] = true
+				table.insert(candidates, server.id)
+			end
+		end
+
+		cursor = data.nextPageCursor
+		if #candidates > 0 or not cursor then
+			break
+		end
+
+		task.wait(2)
+	end
+
+	if #candidates == 0 then
+		return nil, "No unvisited joinable server in searched pages"
+	end
+
+	return candidates[math.random(1, #candidates)]
+end
+
+local function main()
+	log("Waiting for Workspace.Rendered.Rifts...")
+
+	local rendered = workspace:WaitForChild("Rendered", 30)
+	if not rendered then
+		fail("Workspace.Rendered did not load.")
+		return
+	end
+
+	local rifts = rendered:WaitForChild("Rifts", 30)
+	if not rifts then
+		fail("Workspace.Rendered.Rifts did not load.")
+		return
+	end
+
+	task.wait(CONFIG.SettleSeconds)
+
+	local joinUrl =
+		"https://www.roblox.com/games/start?placeId="
+		.. tostring(game.PlaceId)
+		.. "&gameInstanceId="
+		.. Http:UrlEncode(game.JobId)
+
+	local riftList = {}
+
+	for _, rift in ipairs(rifts:GetChildren()) do
+		if rift:IsA("Model")
+			or rift:IsA("Folder")
+			or rift:IsA("BasePart") then
+			table.insert(riftList, rift)
+		end
+	end
+
+	table.sort(riftList, function(a, b)
+		return a.Name < b.Name
+	end)
+
+	log("Loaded entries: " .. #riftList)
+
+	if #riftList == 0 then
+		local sent, reason = sendDiscord({
+			embeds = {{
+				title = "🫧 BGSI • Rift Scan",
+				description =
+					"No loaded rift entries found.\n\n"
+					.. "🎮 [Join this server](" .. joinUrl .. ")",
+				color = 16738740,
+				timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ"),
+				footer = {text = "🍭 BGSI Rift Radar"}
+			}}
+		})
+
+		if not sent then
+			fail(tostring(reason) .. ". Not hopping.")
+			return
+		end
+	end
+
+	for index, rift in ipairs(riftList) do
+		if rift.Parent == rifts then
+			local labels = readLabels(rift)
+			local embed = buildEmbed(rift, labels, joinUrl)
+
+			local sent, reason = sendDiscord({
+				embeds = {embed}
+			})
+
+			if not sent then
+				fail(
+					"Report failed for " .. rift.Name
+					.. ": " .. tostring(reason)
+					.. ". Not hopping."
+				)
+				return
+			end
+
+			log("Sent " .. index .. "/" .. #riftList .. ": " .. rift.Name)
+			task.wait(CONFIG.MessageDelay)
+		end
+	end
+
+	log("Reports delivered. Waiting before server hop.")
+	task.wait(CONFIG.HopDelay)
+
+	local nextServer, reason = findNextServer()
+	if not nextServer then
+		fail(reason)
+		return
+	end
+
+	-- Include source, configuration, and visited-server state.
+	local nextExecution =
+		"local SOURCE = " .. string.format("%q", SOURCE) .. "\n"
+		.. "local CONFIG = game:GetService('HttpService'):JSONDecode("
+		.. string.format("%q", Http:JSONEncode(CONFIG)) .. ")\n"
+		.. "local VISITED = game:GetService('HttpService'):JSONDecode("
+		.. string.format("%q", Http:JSONEncode(visited)) .. ")\n"
+		.. SOURCE
+
+	local queued, queueError = pcall(function()
+		queueTeleport(nextExecution)
+	end)
+
+	if not queued then
+		fail("Could not queue next execution: " .. tostring(queueError))
+		return
+	end
+
+	local failureConnection
+	failureConnection = Teleport.TeleportInitFailed:Connect(
+		function(who, result)
+			if who == player then
+				failureConnection:Disconnect()
+				fail("Teleport failed: " .. tostring(result))
+			end
+		end
+	)
+
+	log("Joining server: " .. nextServer)
+
+	local ok, err = pcall(function()
+		Teleport:TeleportToPlaceInstance(
+			game.PlaceId,
+			nextServer,
+			player
+		)
+	end)
+
+	if not ok then
+		failureConnection:Disconnect()
+		fail("Teleport request failed: " .. tostring(err))
+	end
+end
+
+local ok, err = pcall(main)
+if not ok then
+	fail("Runtime error: " .. tostring(err))
+end
+]====]
+
+	local function riftFinderBot()
+		assert(type(loadstring) == "function",
+			"loadstring is unavailable in this environment.")
+
+		local environment = _G
+		if type(getgenv) == "function" then
+			environment = getgenv()
+		end
+
+		if environment.BGSI_RIFT_RADAR_RUNNING then
+			message("Rift finder bot is already running.")
+			return
+		end
+
+		local Http = game:GetService("HttpService")
+		local radarConfig = CONFIG.RiftRadar
+
+		assert(
+			type(radarConfig.Webhook) == "string"
+			and radarConfig.Webhook:match(
+				"^https://discord%.com/api/webhooks/%d+/"
+			),
+			"Set CONFIG.RiftRadar.Webhook before starting."
+		)
+
+		local execution =
+			"local SOURCE = "
+			.. string.format("%q", RADAR_SOURCE)
+			.. "\nlocal CONFIG = "
+			.. "game:GetService('HttpService'):JSONDecode("
+			.. string.format("%q", Http:JSONEncode(radarConfig))
+			.. ")\nlocal VISITED = {}\n"
+			.. RADAR_SOURCE
+
+		local run, compileError = loadstring(execution)
+		assert(run, compileError)
+
+		message("Rift finder bot starting. See console for reports.")
+
+		-- Run separately so the menu stays responsive.
+		task.spawn(function()
+			local success, err = xpcall(run, trace)
+
+			if not success then
+				environment.BGSI_RIFT_RADAR_RUNNING = nil
+				message("Rift finder bot error: " .. tostring(err))
+				warn("[BGSI Rift Radar] " .. tostring(err))
+			elseif not environment.BGSI_RIFT_RADAR_RUNNING then
+				message("Rift finder bot stopped. Check console for details.")
+			end
+		end)
+	end
+
+-- PS99 / PSX CLASSIC LOADERS
+
+	local function loadPS99()
+		message("Loading PS99...")
+		loadRemote(
+			"https://raw.githubusercontent.com/SlamminPig/6FootScripts/main/Scripts/PetSimulator99.lua"
+		)
+		message("PS99 loader finished.")
+	end
+
+	local function loadPSXClassic()
+		message("Loading PSX Classic...")
+		loadRemote(
+			"https://flowauth.net/v1/loaders/11da2320015a5f91ed56d1612361ef0a.lua"
+		)
+		message("PSX Classic loader finished.")
+	end
+
+	-- MENUS
+
+	local showGames, showPS1, showBGSI, showPetTaker, showPS99
+
+	showPetTaker = function()
+		clear()
+		heading.Text = "BGSI - Pet Taker"
+		message("Interface only: trade actions are not connected.")
+
+		button("Freeze Trade", 1, function()
+			message("Freeze Trade is not implemented.")
+		end)
+
+		button("Accept", 2, function()
+			message("Accept is not implemented.")
+		end)
+
+		button("Select Top Value Pets", 3, function()
+			message("Pet selection is not implemented.")
+		end)
+
+		button("Back to BGSI", 4, function()
+			showBGSI()
+		end)
+	end
+
+	showBGSI = function()
+		clear()
+		heading.Text = "BGSI"
+		message("Choose an option.")
+
+		button("Pet Taker", 1, showPetTaker)
+		button("Farming", 2, bgsiFarming)
+		button("rift finder bot", 3, riftFinderBot)
+
+		button("Back to games", 4, function()
+			showGames()
+		end)
+	end
+
+	showPS1 = function()
+		clear()
+		heading.Text = "PS1"
+		message("Choose a script. Scroll for more.")
+
+		button("Dupe", 1, dupe)
+		button("RBX Hat", 2, rbxHat)
+		button("Rename All", 3, renameAll)
+		button("Anti Crash", 4, antiCrash)
+
+		button("Crash", 5, function()
+			clear()
+			heading.Text = "Confirm Crash"
+			message("Warning: this intentionally freezes your client.")
+			button("Run Crash", 1, crash)
+			button("Cancel", 2, showPS1)
+		end)
+
+		button("Destroy Sleigh", 6, destroySleigh)
+		button("Export Inventory", 7, exportInventory)
+		button("Auto Level", 8, autoLevel)
+
+		button("Stop Auto Level", 9, function()
+			farming = false
+			_G.FARMING = false
+			message("Auto Level stop requested.")
+		end)
+
+		button("Stop RBX Hat", 10, function()
+			hatRunning = false
+			message("RBX Hat stop requested.")
+		end)
+
+		button("Back to games", 11, function()
+			showGames()
+		end)
+	end
+
+	showPS99 = function()
+		clear()
+		heading.Text = "PS99 / PSX Classic"
+		message("Choose a script.")
+
+		button("PS99", 1, loadPS99)
+		button("PSX Classic", 2, loadPSXClassic)
+		button("Back to games", 3, function()
+			showGames()
+		end)
+	end
+
+	showGames = function()
+		clear()
+		heading.Text = "Choose a game"
+		message("Select a game.")
+
+		button("PS1", 1, showPS1)
+		button("BGSI", 2, showBGSI)
+		button("PS99", 3, showPS99)
+	end
+
+	-- WINDOW CONTROLS
+
+	local minimized = false
+
+	minimize.Activated:Connect(function()
+		minimized = not minimized
+		body.Visible = not minimized
+		window.Size = UDim2.fromOffset(
+			350, minimized and 52 or 450
+		)
+		minimize.Text = minimized and "+" or "-"
+	end)
+
+	local dragging = false
+	local dragStart, startPosition, activeTouch
+
+	header.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1
+			or input.UserInputType == Enum.UserInputType.Touch then
+
+			dragging = true
+			activeTouch =
+				input.UserInputType == Enum.UserInputType.Touch
+				and input or nil
+			dragStart = input.Position
+			startPosition = window.Position
+		end
+	end)
+
+	table.insert(connections, UIS.InputChanged:Connect(function(input)
+		if not dragging then
+			return
+		end
+
+		local mouseMove = not activeTouch
+			and input.UserInputType == Enum.UserInputType.MouseMovement
+
+		if mouseMove or input == activeTouch then
+			local delta = input.Position - dragStart
+			window.Position = UDim2.new(
+				startPosition.X.Scale,
+				startPosition.X.Offset + delta.X,
+				startPosition.Y.Scale,
+				startPosition.Y.Offset + delta.Y
+			)
+		end
+	end))
+
+	table.insert(connections, UIS.InputEnded:Connect(function(input)
+		if input == activeTouch
+			or input.UserInputType == Enum.UserInputType.MouseButton1 then
+			dragging = false
+			activeTouch = nil
+		end
+	end))
+
+	gui.Destroying:Connect(function()
+		alive, farming, hatRunning = false, false, false
+		_G.FARMING = false
+
+		if cameraConnection then
+			cameraConnection:Disconnect()
+		end
+
+		for _, connection in ipairs(connections) do
+			connection:Disconnect()
+		end
+
+		-- Radar runs independently after it has been started.
+	end)
+
+	close.Activated:Connect(function()
+		gui:Destroy()
+	end)
+
+	-- PASSWORD SCREEN
+
+	progress.Text = "Nodi: creating password screen..."
+
+	local lock = make("Frame", {
+		Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = Color3.fromRGB(12, 12, 19),
+		BackgroundTransparency = .15,
+		BorderSizePixel = 0,
+		Active = true,
+		ZIndex = 20,
+	}, gui)
+
+	local card = make("Frame", {
+		Size = UDim2.new(.9, 0, 0, 250),
+		AnchorPoint = Vector2.new(.5, .5),
+		Position = UDim2.fromScale(.5, .5),
+		BackgroundColor3 = C.bg,
+		BorderSizePixel = 0,
+		ZIndex = 21,
+	}, lock)
+	round(card)
+
+	make("UISizeConstraint", {
+		MaxSize = Vector2.new(340, 250),
+	}, card)
+
+	make("UIStroke", {
+		Color = C.accent,
+		Thickness = 1.5,
+	}, card)
+
+	make("TextLabel", {
+		Size = UDim2.new(1, -24, 0, 42),
+		Position = UDim2.fromOffset(12, 12),
+		BackgroundTransparency = 1,
+		Text = "Nodi scripts",
+		TextColor3 = C.text,
+		TextSize = 25,
+		Font = Enum.Font.GothamBold,
+		ZIndex = 22,
+	}, card)
+
+	make("TextLabel", {
+		Size = UDim2.new(1, -24, 0, 26),
+		Position = UDim2.fromOffset(12, 58),
+		BackgroundTransparency = 1,
+		Text = "Enter password to unlock",
+		TextColor3 = C.muted,
+		TextSize = 14,
+		Font = Enum.Font.Gotham,
+		ZIndex = 22,
+	}, card)
+
+	local input = make("TextBox", {
+		Size = UDim2.new(1, -40, 0, 44),
+		Position = UDim2.fromOffset(20, 96),
+		BackgroundColor3 = C.button,
+		BorderSizePixel = 0,
+		Text = "",
+		PlaceholderText = "Password",
+		PlaceholderColor3 = C.muted,
+		TextColor3 = C.text,
+		TextSize = 16,
+		Font = Enum.Font.Gotham,
+		ClearTextOnFocus = false,
+		MultiLine = false,
+		ZIndex = 22,
+	}, card)
+	round(input)
+
+	local unlock = make("TextButton", {
+		Size = UDim2.new(1, -40, 0, 42),
+		Position = UDim2.fromOffset(20, 152),
+		BackgroundColor3 = C.accent,
+		BorderSizePixel = 0,
+		Text = "Unlock",
+		TextColor3 = C.text,
+		TextSize = 17,
+		Font = Enum.Font.GothamBold,
+		ZIndex = 22,
+	}, card)
+	round(unlock)
+
+	local lockMessage = make("TextLabel", {
+		Size = UDim2.new(1, -40, 0, 32),
+		Position = UDim2.fromOffset(20, 202),
+		BackgroundTransparency = 1,
+		Text = "",
+		TextColor3 = Color3.fromRGB(255, 130, 130),
+		TextSize = 13,
+		TextWrapped = true,
+		Font = Enum.Font.Gotham,
+		ZIndex = 22,
+	}, card)
+
+	local function tryUnlock()
+		if unlocked or not alive then
+			return
+		end
+
+		if input.Text ~= CONFIG.Password then
+			lockMessage.Text = "Incorrect password."
+			input.Text = ""
+			input:CaptureFocus()
+			return
+		end
+
+		local success, err = xpcall(function()
+			showGames()
+			unlocked = true
+			window.Visible = true
+			lock:Destroy()
+		end, trace)
+
+		if success then
+			progress:Destroy()
+		else
+			progress.Text = "Nodi unlock error:\n" .. tostring(err)
+		end
+	end
+
+	unlock.Activated:Connect(tryUnlock)
+
+	input.FocusLost:Connect(function(enterPressed)
+		if enterPressed then
+			tryUnlock()
+		end
+	end)
+
+	progress.Text = "Nodi: password screen ready."
+end, trace)
+
+if not ok then
+	if progress.Parent then
+		progress.TextColor3 = Color3.fromRGB(255, 130, 130)
+		progress.Text = "Nodi startup error:\n" .. tostring(startupError)
+	end
+	warn("[Nodi startup] " .. tostring(startupError))
+end
+
+-- END OF COMPLETE SCRIPT
